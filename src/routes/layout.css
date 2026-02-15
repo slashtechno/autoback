@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+a {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    
+    font-weight: bold;
+}
