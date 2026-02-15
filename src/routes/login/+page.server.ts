@@ -1,6 +1,7 @@
 import { auth } from '$lib/server/auth';
 import type { Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
+import { REGISTRATION_TOKEN } from '$env/static/private';
 
 type loginOrRegisterPayload = {
 	email: string;
@@ -18,6 +19,14 @@ export const actions = {
 		console.log('Login/Register Payload', payload);
 
 		try {
+			if (REGISTRATION_TOKEN && data.get('registrationToken') === REGISTRATION_TOKEN) {
+				console.log('Registration token is valid, proceeding with sign up');
+			} else {
+				console.log(
+					'No valid registration token provided, attempting to log in instead of signing up'
+				);
+				throw new Error('GO_TO_LOGIN_INSTEAD');
+			}
 			const signUpResponse = await auth.api.signUpEmail({
 				body: {
 					email: payload.email, // required
@@ -27,7 +36,10 @@ export const actions = {
 			});
 			console.log('Sign Up Response', signUpResponse);
 		} catch (error) {
-			if ((error as any).body.code == 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') {
+			if (
+				(error instanceof Error && error.message === 'GO_TO_LOGIN_INSTEAD') ||
+				(error as any).body?.code === 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL'
+			) {
 				// login instead of signing up
 				try {
 					const signInResponse = await auth.api.signInEmail({
@@ -39,7 +51,7 @@ export const actions = {
 						},
 						headers: request.headers
 					});
-                    console.log('Sign In Response', signInResponse);
+					// console.log('Sign In Response', signInResponse);
 				} catch (error) {
 					console.error('Error during sign in:', error);
 					return fail(500, { message: 'An error occurred during sign in.' });
@@ -49,12 +61,12 @@ export const actions = {
 				return fail(500, { message: 'An error occurred during sign up.' });
 			}
 		}
-        // It seems a reload is required to get CheckLogin to show logged in, so this is an easy way to trigger something that makes it work
-        redirect(302, '/');
+		// It seems a reload is required to get CheckLogin to show logged in, so this is an easy way to trigger something that makes it work
+		redirect(302, '/');
 	},
-    load: async ({ locals }) => {
-        if (locals.user) {
-            redirect(302, '/');
-        }
-    }
+	load: async ({ locals }) => {
+		if (locals.user) {
+			redirect(302, '/');
+		}
+	}
 } satisfies Actions;
