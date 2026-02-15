@@ -1,5 +1,5 @@
 import { auth } from '$lib/server/auth';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { REGISTRATION_TOKEN } from '$env/static/private';
 
@@ -63,10 +63,10 @@ export const actions = {
 		}
 		// It seems a reload is required to get CheckLogin to show logged in, so this is an easy way to trigger something that makes it work
 		redirect(302, '/');
-	},
-	load: async ({ locals }) => {
-		if (locals.user) {
-			redirect(302, '/');
-		}
 	}
 } satisfies Actions;
+export const load: PageServerLoad = async ({ locals }) => {
+	if (locals.user) {
+		redirect(302, '/');
+	}
+};
