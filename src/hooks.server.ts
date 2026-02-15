@@ -14,4 +14,5 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	return svelteKitHandler({ event, resolve, auth, building });
 };
 
+// Since we don't need to add anything else to the handle function, we can export the better-auth handler directly
 export const handle: Handle = handleBetterAuth;

@@ -1,0 +1,60 @@
+import { auth } from '$lib/server/auth';
+import type { Actions } from './$types';
+import { fail, redirect } from '@sveltejs/kit';
+
+type loginOrRegisterPayload = {
+	email: string;
+	password: string;
+};
+
+export const actions = {
+	login: async ({ request }) => {
+		const data = await request.formData();
+
+		const payload: loginOrRegisterPayload = {
+			email: data.get('email') as string,
+			password: data.get('password') as string
+		};
+		console.log('Login/Register Payload', payload);
+
+		try {
+			const signUpResponse = await auth.api.signUpEmail({
+				body: {
+					email: payload.email, // required
+					password: payload.password, // required
+					name: payload.email.split('@')[0]
+				}
+			});
+			console.log('Sign Up Response', signUpResponse);
+		} catch (error) {
+			if ((error as any).body.code == 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') {
+				// login instead of signing up
+				try {
+					const signInResponse = await auth.api.signInEmail({
+						body: {
+							email: payload.email, // required
+							password: payload.password, // required
+							rememberMe: true
+							// callbackURL: 'https://example.com/callback'
+						},
+						headers: request.headers
+					});
+                    console.log('Sign In Response', signInResponse);
+				} catch (error) {
+					console.error('Error during sign in:', error);
+					return fail(500, { message: 'An error occurred during sign in.' });
+				}
+			} else if (error instanceof Error) {
+				console.error('Error during sign up:', error.message);
+				return fail(500, { message: 'An error occurred during sign up.' });
+			}
+		}
+        // It seems a reload is required to get CheckLogin to show logged in, so this is an easy way to trigger something that makes it work
+        redirect(302, '/');
+	},
+    load: async ({ locals }) => {
+        if (locals.user) {
+            redirect(302, '/');
+        }
+    }
+} satisfies Actions;
