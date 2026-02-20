@@ -61,12 +61,11 @@ export const actions = {
 				return fail(500, { message: 'An error occurred during sign up.' });
 			}
 		}
-		// It seems a reload is required to get CheckLogin to show logged in, so this is an easy way to trigger something that makes it work
-		redirect(302, '/');
+		throw redirect(303, '/');
 	}
 } satisfies Actions;
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) {
-		redirect(302, '/');
+		throw redirect(303, '/');
 	}
 };

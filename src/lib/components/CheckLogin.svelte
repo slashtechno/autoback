@@ -1,11 +1,18 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
 	const session = authClient.useSession();
 
-	function handleSignOut() {
-		authClient.signOut();
-		goto('/');
+	// Docs: https://www.better-auth.com/docs/concepts/client#hooks (refetch is documented here)
+	// and https://www.better-auth.com/docs/integrations/svelte-kit (server-action auth + SvelteKit integration details)
+	afterNavigate(async () => {
+		await session.get().refetch();
+	});
+
+	async function handleSignOut() {
+		await authClient.signOut();
+		await session.get().refetch();
+		await goto('/');
 	}
 </script>
 
