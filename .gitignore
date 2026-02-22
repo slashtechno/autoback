@@ -1,6 +1,8 @@
 # db
 *.db
 
+test-data/
+
 # Node modules, of course
 node_modules
 
