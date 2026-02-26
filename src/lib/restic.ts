@@ -11,7 +11,8 @@ export default class Restic {
 		this.targetPath = targetPath;
 	}
 
-	initializeRepoIfNeeded = async () => {
+    // This is private since backup() will call it
+	private initializeRepoIfNeeded = async () => {
 		try {
 			await execa('restic', ['snapshots', '-r', this.repoPath], {
 				env: { RESTIC_PASSWORD: this.password }
@@ -36,6 +37,8 @@ export default class Restic {
     };
 
     backup = async () => {
+        // Ensure the repo is initialized before trying to back up
+        await this.initializeRepoIfNeeded();
         // First, unlock the repo to clear any locks that might be present from previous runs that didn't exit cleanly
         await this.unlockRepo();
 

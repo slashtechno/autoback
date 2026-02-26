@@ -1,6 +1,7 @@
 import chokidar from 'chokidar';
 import { Prisma } from '$lib/../generated/prisma/client';
 // To allow us to run watcher.ts directly, we can't import Prisma since it needs to load env vars via Vite env functions
+import Restic from './restic';
 
 // Satisifes is basically saying “Ensure this object is assignable to Prisma.DriveSelect, but keep its exact literal type.”
 const driveSelect = {
@@ -41,9 +42,13 @@ export async function watchPathsInBg(
 	// });
 
 	// Check for when the specific directory is added (e.g., if the user plugs in a drive that we want to back up)
-	watcher.on('addDir', (path) => {
+	watcher.on('addDir', async (path) => {
 		if (pathsToWatch.includes(path)) {
 			console.log(`Directory added that we're watching: ${path}`);
+			// pathsToWatch is built from drives so it's fine to use !
+			const drive = drives.find((d) => d.path === path)!;
+			const resticInstance = new Restic(drive.backupPath, drive.resticKey, drive.path);
+			await resticInstance.backup()
 		}
 	});
 }
