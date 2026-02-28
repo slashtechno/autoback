@@ -48,7 +48,10 @@ export async function watchPathsInBg(
 			// pathsToWatch is built from drives so it's fine to use !
 			const drive = drives.find((d) => d.path === path)!;
 			const resticInstance = new Restic(drive.backupPath, drive.resticKey, drive.path);
-			await resticInstance.backup()
+			for await (const line of resticInstance.backup()) {
+				// Restic output: {"message_type":"status","percent_done":1,"total_files":4,"files_done":4,"total_bytes":2147483693,"bytes_done":2147483693}
+				console.log(`Restic output: ${line}`);
+			}
 		}
 	});
 }

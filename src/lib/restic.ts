@@ -36,29 +36,21 @@ export default class Restic {
         }
     };
 
-    backup = async () => {
+    async *backup(this: Restic) {
         // Ensure the repo is initialized before trying to back up
         await this.initializeRepoIfNeeded();
         // First, unlock the repo to clear any locks that might be present from previous runs that didn't exit cleanly
         await this.unlockRepo();
 
         try {
-            const { stdout } = await execa('restic', ['backup', this.targetPath, '-r', this.repoPath, '--json'], {
+            const execaPromise = execa('restic', ['backup', this.targetPath, '-r', this.repoPath, '--json'], {
                 env: { RESTIC_PASSWORD: this.password }
             });
-            for (const line of stdout.split('\n')) {
-                if (line.trim()) {
-                    try {
-                        const json = JSON.parse(line);
-                        if (json.message) {
-                            console.log(`Restic: ${json.message}`);
-                        }
-                    } catch {
-                        // Not a JSON line, ignore
-                    }
-                }
-            }  
-            console.log(`Backup successful for ${this.targetPath}: ${stdout}`);
+            // https://github.com/sindresorhus/execa/blob/f3a2e8481a1e9138de3895827895c834078b9456/docs/lines.md#progressive-splitting
+            for await (const line of execaPromise){
+                yield line;
+            }
+            console.log(`Backup successful for ${this.targetPath}: ${this.repoPath}`);
         } catch (error) {
             console.error(`Error during backup of ${this.targetPath}: ${error}`);
         }
