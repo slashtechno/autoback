@@ -5,6 +5,7 @@ import { Prisma } from '$lib/../generated/prisma/client';
 // To allow us to run watcher.ts directly, we can't import Prisma since it needs to load env vars via Vite env functions
 import Restic from './restic';
 import { backupProgress } from './server/backup-progress';
+import { hostPath } from './server/host-path';
 
 // Walk up targetPath until we find a directory that exists. Used when a watched path
 // and some of its ancestors are deleted — we watch the deepest surviving ancestor so
@@ -42,16 +43,16 @@ const anchorWatchers = new Map<string, string>();
 // Add a newly-created drive to the running watcher without restarting the server
 export function addDriveToWatcher(drive: WatchedDrive) {
 	watchedDrives.push(drive);
-	watchedPaths.push(drive.path);
-	watcher?.add(drive.path);
+	watchedPaths.push(hostPath(drive.path));
+	watcher?.add(hostPath(drive.path));
 }
 
 // Remove a deleted drive from the running watcher and clean up any stale progress
 export function removeDriveFromWatcher(path: string) {
 	watchedDrives = watchedDrives.filter((d) => d.path !== path);
-	const idx = watchedPaths.indexOf(path);
+	const idx = watchedPaths.indexOf(hostPath(path));
 	if (idx !== -1) watchedPaths.splice(idx, 1);
-	watcher?.unwatch(path);
+	watcher?.unwatch(hostPath(path));
 	delete backupProgress[path]; // clear any leftover progress state
 }
 
@@ -66,7 +67,7 @@ export async function watchPathsInBg(
 
 	// Populate module-level state from the initial drive list
 	watchedDrives = drives;
-	watchedPaths.push(...drives.map((d) => d.path));
+	watchedPaths.push(...drives.map((d) => hostPath(d.path)));
 
 	watcher = chokidar.watch(watchedPaths, {
 		persistent: false, // We want the process to exit if this is the only thing left running
@@ -107,21 +108,23 @@ export async function watchPathsInBg(
 		}
 
 		if (watchedPaths.includes(path)) {
-			console.log(`Directory added that we're watching: ${path}`);
-			const drive = watchedDrives.find((d) => d.path === path)!;
+			// path from chokidar is the resolved (prefixed) path; find the drive by its prefixed path
+			const drive = watchedDrives.find((d) => hostPath(d.path) === path)!;
+			console.log(`Directory added that we're watching: ${drive.path}`);
 
 			// Respect the autoBackup flag — skip if user disabled auto-backup for this drive
 			if (!drive.autoBackup) {
-				console.log(`Auto-backup disabled for ${path}, skipping`);
+				console.log(`Auto-backup disabled for ${drive.path}, skipping`);
 				return;
 			}
 
-			const resticInstance = new Restic(drive.backupPath, drive.resticKey, drive.path);
+			const resticInstance = new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path));
 			for await (const update of resticInstance.backup()) {
 				// Restic output: {"message_type":"status","percent_done":1,"total_files":4,"files_done":4,"total_bytes":2147483693,"bytes_done":2147483693}
-				backupProgress[path] = update;
+				// Use the natural (un-prefixed) path as the progress key so the polling endpoint can find it
+				backupProgress[drive.path] = update;
 				if (update.message_type === 'status') {
-					console.log(`Backup progress for ${path}: ${update.percent_done}%`);
+					console.log(`Backup progress for ${drive.path}: ${update.percent_done}%`);
 				}
 			}
 		}

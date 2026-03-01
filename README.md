@@ -14,48 +14,24 @@ The goal of this project is to be able to plug in the portable SSD that I work o
 3. Copy `.env.example` to `.env` and fill in the required environment variables.
    a. `cp .env.example .env`
 
-## Running in Production (PM2)
+## Running in Production
 
-PM2 manages the process, restarts it on crash, and handles startup on boot.
-
-1. Install PM2 globally:
-   ```bash
-   bun add -g pm2
-   ```
-2. Build the app (also generates the Prisma client):
-   ```bash
-   bun run build
-   ```
-3. Apply database migrations:
-   ```bash
-   bun run migrate
-   ```
-4. Start with PM2 (using Bun as the interpreter):
-   ```bash
-   bunx pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production
-   ```
-5. To start automatically on boot:
-   ```bash
-   bunx pm2 startup                                                       # register the systemd/launchd service
-   bunx pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production  # start your app
-   bunx pm2 save                                                          # persist this process list on reboot
-   ```
-
-Other useful PM2 commands (use `bunx pm2` since PM2 is bun-installed):
-- `bunx pm2 logs autoback` — view live logs
-- `bunx pm2 status` — check process status
-- `bunx pm2 restart autoback` — restart after a config or `.env` change
-- `bunx pm2 stop autoback` — stop the process
-- `bunx pm2 delete autoback` — remove the app from PM2
-
-### Configuring the port
-
-Set `PORT` in your `.env` file:
-```
-PORT=3000
+```bash
+docker compose up -d --build
 ```
 
-Bun will automatically load your `.env` file at runtime.
+The container includes Restic and runs migrations automatically on startup. The app runs on port 3000.
+
+### Path handling
+
+The host filesystem is mounted at `/host` and `PUBLIC_HOST_PREFIX=/host` is set in `compose.yaml`. Enter paths as they appear on the host (e.g. `/mnt/usb`) — the app prepends `/host` automatically. The UI shows a note when this is active.
+
+To restrict access to specific directories, narrow the volume mount in `compose.yaml`:
+```yaml
+volumes:
+  - /mnt:/host/mnt
+```
+Or remove `PUBLIC_HOST_PREFIX` entirely to disable prefix behaviour.
 
 ## Mounting a USB Drive on boot (Linux)
 

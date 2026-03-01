@@ -1,15 +1,20 @@
-# In case we want to use Postgres instead of SQLite later
 services:
-  db:
-    image: postgres
-    restart: always
+  autoback:
+    build: .
     ports:
-      - 5432:5432
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: mysecretpassword
-      POSTGRES_DB: local
+      - "3000:3000"
     volumes:
-      - pgdata:/var/lib/postgresql
-volumes:
-  pgdata:
+      # Persist the database across container restarts
+      - ./data:/app/data
+      # Mount the full host filesystem so users can specify any host path in the UI.
+      # Remove or narrow this (e.g. - /mnt:/host/mnt) if you don't want full host access.
+      - /:/host
+    env_file:
+      - .env
+    environment:
+      # Tells the app to prepend /host to all user-supplied paths.
+      # Remove this if you narrowed the volume mount above.
+      - PUBLIC_HOST_PREFIX=/host
+      # Override DATABASE_URL to store the DB in the persistent volume.
+      - DATABASE_URL=file:/app/data/db.sqlite
+    restart: unless-stopped

@@ -43,6 +43,13 @@
 <h2 class="mb-1">Drives</h2>
 <p class="text-gray-500 dark:text-gray-400 mb-5">Watched drives and their restic backups.</p>
 
+{#if data.hostPrefix}
+	<p class="text-xs text-blue-600 dark:text-blue-400 mb-4">
+		Container mode active — <code>{data.hostPrefix}</code> is prepended to all paths before use.
+		Enter your host paths as normal (e.g. <code>/mnt/usb</code>, not <code>{data.hostPrefix}/mnt/usb</code>).
+	</p>
+{/if}
+
 {#if form?.message}
 	<p class="text-red-500 dark:text-red-400">{form.message}</p>
 {/if}

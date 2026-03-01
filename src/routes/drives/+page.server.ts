@@ -6,6 +6,7 @@ import { Prisma } from '$lib/../generated/prisma/client';
 import Restic from '$lib/restic';
 import { addDriveToWatcher, removeDriveFromWatcher } from '$lib/watcher';
 import { backupProgress } from '$lib/server/backup-progress';
+import { hostPath, hostPrefix } from '$lib/server/host-path';
 
 // Fetch all drives (including resticKey, which lives server-side only) and their snapshots.
 // resticKey is stripped before the data is returned to the browser.
@@ -21,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		await Promise.all(
 			drives.map(async (d) => {
 				try {
-					return [d.id, await new Restic(d.backupPath, d.resticKey, d.path).snapshots()];
+					return [d.id, await new Restic(hostPath(d.backupPath), d.resticKey, hostPath(d.path)).snapshots()];
 				} catch {
 					return [d.id, []];
 				}
@@ -29,7 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		)
 	);
 
-	return { drives: drivesForClient, snapshots: snapshotMap };
+	return { drives: drivesForClient, snapshots: snapshotMap, hostPrefix };
 };
 
 export const actions = {
@@ -61,7 +62,7 @@ export const actions = {
 		removeDriveFromWatcher(drive.path);
 
 		if (data.get('deleteRepo') === 'on') {
-			await fs.rm(drive.backupPath, { recursive: true, force: true });
+			await fs.rm(hostPath(drive.backupPath), { recursive: true, force: true });
 		}
 
 		await prisma.drive.delete({ where: { id } });
@@ -80,7 +81,7 @@ export const actions = {
 		if (!drive) return fail(404, { message: 'Drive not found' });
 
 		(async () => {
-			const restic = new Restic(drive.backupPath, drive.resticKey, drive.path);
+			const restic = new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path));
 			for await (const update of restic.backup()) {
 				backupProgress[drive.path] = update;
 			}
@@ -110,7 +111,7 @@ export const actions = {
 		const drive = await prisma.drive.findUnique({ where: { id: data.get('driveId') as string } });
 		if (!drive) return fail(404, { message: 'Drive not found' });
 
-		await new Restic(drive.backupPath, drive.resticKey, drive.path).forget(snapshotId);
+		await new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path)).forget(snapshotId);
 		throw redirect(303, '/drives');
 	},
 
@@ -126,8 +127,8 @@ export const actions = {
 		if (!drive) return fail(404, { message: 'Drive not found' });
 
 		try {
-			await new Restic(drive.backupPath, drive.resticKey, drive.path).restore(snapshotId, targetPath);
-			return { message: `Restored ${snapshotId} to ${targetPath}` };
+			await new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path)).restore(snapshotId, hostPath(targetPath));
+			return { message: `Restored ${snapshotId} to ${hostPath(targetPath)}` };
 		} catch (err) {
 			return fail(500, { message: `Restore failed: ${err}` });
 		}
