@@ -17,5 +17,5 @@ services:
       # Remove this if you narrowed the volume mount above.
       PUBLIC_HOST_PREFIX: /host
       # Override DATABASE_URL to store the DB in the persistent volume.
-      DATABASE_URL: file:/app/data/db.sqlite
+      DATABASE_URL: "file:///app/data/db.sqlite"
     restart: unless-stopped
