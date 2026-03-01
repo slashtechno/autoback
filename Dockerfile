@@ -14,5 +14,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./
+RUN mkdir -p /app/data
 EXPOSE 3000
 CMD ["sh", "-c", "bun run migrate && node build/index.js"]

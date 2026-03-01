@@ -10,11 +10,12 @@ services:
       # Remove or narrow this (e.g. - /mnt:/host/mnt) if you don't want full host access.
       - /:/host
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       # Tells the app to prepend /host to all user-supplied paths.
       # Remove this if you narrowed the volume mount above.
-      - PUBLIC_HOST_PREFIX=/host
+      PUBLIC_HOST_PREFIX: /host
       # Override DATABASE_URL to store the DB in the persistent volume.
-      - DATABASE_URL=file:/app/data/db.sqlite
+      DATABASE_URL: file:/app/data/db.sqlite
     restart: unless-stopped
