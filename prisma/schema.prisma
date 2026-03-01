@@ -8,12 +8,13 @@ datasource db {
 }
 
 model Drive {
-  id         String   @id @default(cuid())
-  path       String
-  backupPath String
-  resticKey  String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid())
+  path        String
+  backupPath  String
+  resticKey   String
+  autoBackup  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("drive")
 }

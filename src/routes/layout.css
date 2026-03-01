@@ -1,10 +1,18 @@
 @import 'tailwindcss';
-@plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
 
-a {
-    text-decoration: underline;
-    text-decoration-style: dotted;
-    
-    font-weight: bold;
+@layer base {
+  body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; line-height: 1.6; }
+  label { display: block; }
+  details > summary { cursor: pointer; list-style: revert; }
+
+  input[type=text], input[type=password] { width: 100%; padding: 4px 8px; border: 1px solid #d1d5db; }
+  button { padding: 2px 12px; border: 1px solid #d1d5db; background: #f3f4f6; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #e5e7eb; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111827; color: #f9fafb; }
+    input[type=text], input[type=password] { border-color: #4b5563; background: #1f2937; color: #f9fafb; }
+    button { border-color: #4b5563; background: #374151; color: #f9fafb; }
+    button:hover { background: #4b5563; }
+  }
 }

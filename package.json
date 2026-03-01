@@ -34,6 +34,7 @@
 	},
 	"dependencies": {
 		"@better-auth/passkey": "^1.4.18",
+		"@picocss/pico": "^2.1.1",
 		"@prisma/adapter-better-sqlite3": "^7.4.0",
 		"@prisma/client": "^7.4.0",
 		"chokidar": "^5.0.0",

@@ -7,15 +7,15 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
-<div class="flex h-screen flex-col">
-	<div class="grow">
-		<!-- Header -->
-		<header class="flex justify-center">
-			<a href="/"><h1 class="prose prose-xl">Autoback</h1></a>
-		</header>
-		{@render children()}
-	</div>
-	<footer class="flex justify-center">
+
+<div class="max-w-2xl mx-auto px-5">
+	<header class="py-2.5 border-b border-gray-200 dark:border-gray-700 mb-6">
+		<a href="/"><strong>Autoback</strong></a>
+	</header>
+
+	{@render children()}
+
+	<footer class="mt-10 py-2.5 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
 		<CheckLogin />
 	</footer>
 </div>

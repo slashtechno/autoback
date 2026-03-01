@@ -1,17 +1,74 @@
 import { execa } from 'execa';
 
+export interface ResticSnapshot {
+	id: string;       // full SHA
+	short_id: string; // 8-char abbreviation shown in the UI
+	time: string;     // ISO timestamp of when the snapshot was taken
+	paths: string[];  // source paths included in the snapshot
+}
+
 export default class Restic {
 	repoPath: string;
 	password: string;
-	targetPath: string;
+	sourcePath: string; // the path being backed up (used by backup() and dump())
 
-	constructor(repoPath: string, password: string, targetPath: string) {
+	constructor(repoPath: string, password: string, sourcePath: string) {
 		this.repoPath = repoPath;
 		this.password = password;
-		this.targetPath = targetPath;
+		this.sourcePath = sourcePath;
 	}
 
-    // This is private since backup() will call it
+	// Run `restic snapshots` and return the parsed list. Returns [] if the repo doesn't exist yet.
+	async snapshots(): Promise<ResticSnapshot[]> {
+		const { stdout } = await execa('restic', ['snapshots', '-r', this.repoPath, '--json'], {
+			env: { RESTIC_PASSWORD: this.password }
+		});
+		return JSON.parse(stdout);
+	}
+
+	// Remove a snapshot by ID and prune unreferenced data packs in one step.
+	async forget(snapshotId: string): Promise<void> {
+		await execa('restic', ['forget', snapshotId, '--prune', '-r', this.repoPath], {
+			env: { RESTIC_PASSWORD: this.password }
+		});
+	}
+
+	// Restore a snapshot. `targetPath` is used as a filesystem root by restic —
+	// files are placed at `targetPath/original/absolute/path`. Use `/` to restore in-place.
+	async restore(snapshotId: string, targetPath: string): Promise<void> {
+		await execa('restic', ['restore', snapshotId, '--target', targetPath, '-r', this.repoPath], {
+			env: { RESTIC_PASSWORD: this.password }
+		});
+	}
+
+	// Spawn `restic dump` with stdout piped, for streaming a TAR archive to the browser.
+	// Caller is responsible for reading/piping proc.stdout.
+	dump() {
+		return execa(
+			'restic',
+			['dump', 'latest', this.sourcePath, '--archive', 'tar', '-r', this.repoPath],
+			{ env: { RESTIC_PASSWORD: this.password }, stdout: 'pipe' }
+		);
+	}
+
+	// Run `restic backup` as an async generator, yielding each JSON progress line as it arrives.
+	async *backup(this: Restic) {
+		await this.initializeRepoIfNeeded();
+		await this.unlockRepo();
+		try {
+			const proc = execa('restic', ['backup', this.sourcePath, '-r', this.repoPath, '--json'], {
+				env: { RESTIC_PASSWORD: this.password }
+			});
+			for await (const line of proc) {
+				yield JSON.parse(line);
+			}
+			console.log(`Backup complete: ${this.sourcePath} → ${this.repoPath}`);
+		} catch (error) {
+			console.error(`Backup error for ${this.sourcePath}: ${error}`);
+		}
+	}
+
+	// Check if the repo exists by running `restic snapshots`; init it if that fails.
 	private initializeRepoIfNeeded = async () => {
 		try {
 			await execa('restic', ['snapshots', '-r', this.repoPath], {
@@ -21,38 +78,17 @@ export default class Restic {
 			await execa('restic', ['init', '-r', this.repoPath], {
 				env: { RESTIC_PASSWORD: this.password }
 			});
-			console.log(`Initialized: ${this.repoPath}`);
+			console.log(`Initialized repo: ${this.repoPath}`);
 		}
 	};
 
-    private unlockRepo = async () => {
-        try {
-            await execa('restic', ['unlock', '-r', this.repoPath], {
-                env: { RESTIC_PASSWORD: this.password }
-            });
-            console.log(`Unlocked repo: ${this.repoPath}`);
-        } catch (error) {
-            console.error(`Error unlocking repo: ${error}`);
-        }
-    };
-
-    async *backup(this: Restic) {
-        // Ensure the repo is initialized before trying to back up
-        await this.initializeRepoIfNeeded();
-        // First, unlock the repo to clear any locks that might be present from previous runs that didn't exit cleanly
-        await this.unlockRepo();
-
-        try {
-            const execaPromise = execa('restic', ['backup', this.targetPath, '-r', this.repoPath, '--json'], {
-                env: { RESTIC_PASSWORD: this.password }
-            });
-            // https://github.com/sindresorhus/execa/blob/f3a2e8481a1e9138de3895827895c834078b9456/docs/lines.md#progressive-splitting
-            for await (const line of execaPromise){
-                yield JSON.parse(line);
-            }
-            console.log(`Backup successful for ${this.targetPath}: ${this.repoPath}`);
-        } catch (error) {
-            console.error(`Error during backup of ${this.targetPath}: ${error}`);
-        }
-    };
+	private unlockRepo = async () => {
+		try {
+			await execa('restic', ['unlock', '-r', this.repoPath], {
+				env: { RESTIC_PASSWORD: this.password }
+			});
+		} catch (error) {
+			console.error(`Error unlocking repo: ${error}`);
+		}
+	};
 }
