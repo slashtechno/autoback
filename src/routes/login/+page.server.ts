@@ -1,7 +1,7 @@
 import { auth } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
-import { REGISTRATION_TOKEN } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 type loginOrRegisterPayload = {
 	email: string;
@@ -19,7 +19,7 @@ export const actions = {
 		console.log('Login/Register Payload', payload);
 
 		try {
-			if (REGISTRATION_TOKEN && data.get('registrationToken') === REGISTRATION_TOKEN) {
+			if (env.REGISTRATION_TOKEN && data.get('registrationToken') === env.REGISTRATION_TOKEN) {
 				console.log('Registration token is valid, proceeding with sign up');
 			} else {
 				console.log(
