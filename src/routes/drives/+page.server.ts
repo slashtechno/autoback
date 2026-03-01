@@ -30,6 +30,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			resticKey: true
 		}
 	});
-	console.log('Loaded Drives', drives);
+	// console.log('Loaded Drives', drives);
 	return { drives };
 };

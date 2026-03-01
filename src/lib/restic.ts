@@ -48,7 +48,7 @@ export default class Restic {
             });
             // https://github.com/sindresorhus/execa/blob/f3a2e8481a1e9138de3895827895c834078b9456/docs/lines.md#progressive-splitting
             for await (const line of execaPromise){
-                yield line;
+                yield JSON.parse(line);
             }
             console.log(`Backup successful for ${this.targetPath}: ${this.repoPath}`);
         } catch (error) {
