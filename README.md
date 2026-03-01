@@ -30,14 +30,15 @@ PM2 manages the process, restarts it on crash, and handles startup on boot.
    ```bash
    bun run migrate
    ```
-4. Start with PM2:
+4. Start with PM2 (using Bun as the interpreter):
    ```bash
-   pm2 start ecosystem.config.cjs --env production
+   pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production
    ```
 5. To start automatically on boot:
    ```bash
-   pm2 startup   # follow the printed instruction to register the init script
-   pm2 save      # save the current process list so it's restored on boot
+   pm2 startup                                                       # register the systemd/launchd service
+   pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production  # start your app
+   pm2 save                                                          # persist this process list on reboot
    ```
 
 Other useful PM2 commands:
@@ -45,6 +46,7 @@ Other useful PM2 commands:
 - `pm2 status` — check process status
 - `pm2 restart autoback` — restart after a config or `.env` change
 - `pm2 stop autoback` — stop the process
+- `pm2 delete autoback` — remove the app from PM2
 
 ### Configuring the port
 
@@ -53,7 +55,7 @@ Set `PORT` in your `.env` file:
 PORT=3000
 ```
 
-> **Note:** `--env-file=.env` (used in `ecosystem.config.cjs`) requires Node.js 20.6 or later.
+Bun will automatically load your `.env` file at runtime.
 
 ## Mounting a USB Drive on boot (Linux)
 
