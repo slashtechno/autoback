@@ -16,5 +16,6 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/package.json ./
 RUN mkdir -p /app/data
+ENV PORT=8433
 EXPOSE 8433
 CMD ["sh", "-c", "bun run migrate && node build/index.js"]
