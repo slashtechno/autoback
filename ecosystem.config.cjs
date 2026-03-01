@@ -3,8 +3,7 @@
       {
         name: 'autoback',
         script: 'build/index.js',
-        interpreter: 'bun', 
-        node_args: '--env-file=.env',
+        interpreter: 'bun',
         env: {
           NODE_ENV: 'production',
         },
