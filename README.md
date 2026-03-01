@@ -20,7 +20,7 @@ The goal of this project is to be able to plug in the portable SSD that I work o
 docker compose up -d --build
 ```
 
-The container includes Restic and runs migrations automatically on startup. The app runs on port 3000.
+The container includes Restic and runs migrations automatically on startup. The app runs on port 8433.
 
 ### Path handling
 
