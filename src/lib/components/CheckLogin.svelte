@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { authClient } from '$lib/auth-client';
 	const session = authClient.useSession();
 
@@ -24,7 +25,7 @@
 			</p>
 			<button onclick={handleSignOut}> Sign Out </button>
 		</div>
-	{:else}
+	{:else if page.url.pathname !== '/login'}
 		<button onclick={() => goto('/login')} class=""> Login </button>
 	{/if}
 </div>

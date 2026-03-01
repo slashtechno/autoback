@@ -1,6 +1,6 @@
 # Autoback
 
-A utility to automatically back up specific drives, when plugged in, to Google Drive. Scans `/media`/`/mnt` for a specific drive name, and when attached, backs up the drive using Restic. If the drive is unplugged during backup, the backup will be abandoned, but because of Restic's design, this isn't horrible, as the next backup still only needs to back up changed files.
+A utility to automatically back up specific drives, when plugged in, using snapshots. Scans `/media`/`/mnt` (or any other dir) for a specific drive name (using the folder name), and when attached, backs up the drive using Restic. If the drive is unplugged during backup, the backup will be abandoned, but because of Restic's design, this isn't horrible, as the next backup still only needs to back up changed files.
 
 The goal of this project is to be able to plug in the portable SSD that I work off of into my Raspberry Pi and have it automatically back up without me needing to initiate anything. A web UI provides a dashboard to view backup status, logs, and manage backup settings. A SQLite database is used and BetterAuth handles authentication. In addition to configuration, the web UI allows for snapshot management (restore, download, delete).
 
