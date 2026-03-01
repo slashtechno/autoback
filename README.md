@@ -32,21 +32,21 @@ PM2 manages the process, restarts it on crash, and handles startup on boot.
    ```
 4. Start with PM2 (using Bun as the interpreter):
    ```bash
-   pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production
+   bunx pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production
    ```
 5. To start automatically on boot:
    ```bash
-   pm2 startup                                                       # register the systemd/launchd service
-   pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production  # start your app
-   pm2 save                                                          # persist this process list on reboot
+   bunx pm2 startup                                                       # register the systemd/launchd service
+   bunx pm2 start ecosystem.config.cjs --interpreter $(which bun) --env production  # start your app
+   bunx pm2 save                                                          # persist this process list on reboot
    ```
 
-Other useful PM2 commands:
-- `pm2 logs autoback` — view live logs
-- `pm2 status` — check process status
-- `pm2 restart autoback` — restart after a config or `.env` change
-- `pm2 stop autoback` — stop the process
-- `pm2 delete autoback` — remove the app from PM2
+Other useful PM2 commands (use `bunx pm2` since PM2 is bun-installed):
+- `bunx pm2 logs autoback` — view live logs
+- `bunx pm2 status` — check process status
+- `bunx pm2 restart autoback` — restart after a config or `.env` change
+- `bunx pm2 stop autoback` — stop the process
+- `bunx pm2 delete autoback` — remove the app from PM2
 
 ### Configuring the port
 
