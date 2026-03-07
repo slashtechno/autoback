@@ -22,6 +22,14 @@ docker compose up -d --build
 
 The container includes Restic and runs migrations automatically on startup. The app runs on port 8433.
 
+### Updating
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Migrations run automatically on startup, so no manual database steps are needed.
+
 ### Path handling
 
 The host filesystem is mounted at `/host` and `PUBLIC_HOST_PREFIX=/host` is set in `compose.yaml`. Enter paths as they appear on the host (e.g. `/mnt/usb`) — the app prepends `/host` automatically. The UI shows a note when this is active.
