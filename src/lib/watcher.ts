@@ -43,6 +43,8 @@ const watchedPaths: string[] = [];
 const anchorWatchers = new Map<string, string>();
 // drive path → AbortController for any currently running backup
 const backupAbortControllers = new Map<string, AbortController>();
+// drive path → last logged progress percentage (to avoid log spam)
+const lastLoggedProgress = new Map<string, number>();
 
 // Build ResticOptions from a WatchedDrive, applying the host prefix to any file paths.
 function resticOptions(drive: WatchedDrive) {
@@ -68,6 +70,7 @@ export function removeDriveFromWatcher(path: string) {
 	if (idx !== -1) watchedPaths.splice(idx, 1);
 	watcher?.unwatch(hostPath(path));
 	delete backupProgress[path]; // clear any leftover progress state
+	lastLoggedProgress.delete(path); // clear any leftover progress logging state
 }
 
 // Sync updated drive settings (exclude file, retention) into the in-memory watcher state.
@@ -169,13 +172,20 @@ export async function watchPathsInBg(
 				// Use the natural (un-prefixed) path as the progress key so the polling endpoint can find it
 				backupProgress[drive.path] = update;
 				if (update.message_type === 'status') {
-					const pct = (update.percent_done * 100).toFixed(2);
-					const remaining = update.seconds_remaining ? `${Math.round(update.seconds_remaining)}s` : '?';
-					console.log(`Backup progress for ${drive.path}: ${pct}% (${remaining} remaining)`);
+					const pctValue = update.percent_done * 100;
+					const lastLogged = lastLoggedProgress.get(drive.path) ?? -1;
+					// Only log when progress changes by at least 1% to avoid log spam
+					if (pctValue - lastLogged >= 1) {
+						const pct = pctValue.toFixed(2);
+						const remaining = update.seconds_remaining ? `${Math.round(update.seconds_remaining)}s` : '?';
+						console.log(`Backup progress for ${drive.path}: ${pct}% (${remaining} remaining)`);
+						lastLoggedProgress.set(drive.path, pctValue);
+					}
 				}
 			}
 
 			backupAbortControllers.delete(drive.path);
+			lastLoggedProgress.delete(drive.path);
 
 			// Prune old snapshots according to the drive's retention policy (no-op if unconfigured)
 			if (backupProgress[drive.path]?.message_type === 'summary') {
