@@ -176,9 +176,7 @@ export async function watchPathsInBg(
 					const lastLogged = lastLoggedProgress.get(drive.path) ?? -1;
 					// Only log when progress changes by at least 1% to avoid log spam
 					if (pctValue - lastLogged >= 1) {
-						const pct = pctValue.toFixed(2);
-						const remaining = update.seconds_remaining ? `${Math.round(update.seconds_remaining)}s` : '?';
-						console.log(`Backup progress for ${drive.path}: ${pct}% (${remaining} remaining)`);
+						console.log(`Backup progress for ${drive.path}: ${pctValue.toFixed(0)}%`);
 						lastLoggedProgress.set(drive.path, pctValue);
 					}
 				}
