@@ -169,7 +169,7 @@ export async function watchPathsInBg(
 				// Use the natural (un-prefixed) path as the progress key so the polling endpoint can find it
 				backupProgress[drive.path] = update;
 				if (update.message_type === 'status') {
-					console.log(`Backup progress for ${drive.path}: ${update.percent_done}%`);
+					console.log(JSON.stringify(update));
 				}
 			}
 
