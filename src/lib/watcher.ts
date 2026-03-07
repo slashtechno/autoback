@@ -25,20 +25,32 @@ async function deepestExistingAncestor(targetPath: string): Promise<string> {
 }
 
 const driveSelect = {
-	path: true,
-	backupPath: true,
-	resticKey: true,
-	autoBackup: true
+	path:          true,
+	backupPath:    true,
+	resticKey:     true,
+	autoBackup:    true,
+	excludeFile:   true,
+	keepSnapshots: true,
 } satisfies Prisma.DriveSelect;
 
 type WatchedDrive = Prisma.DriveGetPayload<{ select: typeof driveSelect }>;
 
-// Module-level state so external callers can add/remove drives without restarting the watcher
+// Module-level state so external callers can add/remove/update drives without restarting the watcher
 let watcher: FSWatcher | null = null;
 let watchedDrives: WatchedDrive[] = [];
 const watchedPaths: string[] = [];
 // target path → temporary anchor being watched (only set when parent is also gone)
 const anchorWatchers = new Map<string, string>();
+// drive path → AbortController for any currently running backup
+const backupAbortControllers = new Map<string, AbortController>();
+
+// Build ResticOptions from a WatchedDrive, applying the host prefix to any file paths.
+function resticOptions(drive: WatchedDrive) {
+	return {
+		excludeFile:   drive.excludeFile   ? hostPath(drive.excludeFile) : undefined,
+		keepSnapshots: drive.keepSnapshots ?? undefined,
+	};
+}
 
 // Add a newly-created drive to the running watcher without restarting the server
 export function addDriveToWatcher(drive: WatchedDrive) {
@@ -49,11 +61,19 @@ export function addDriveToWatcher(drive: WatchedDrive) {
 
 // Remove a deleted drive from the running watcher and clean up any stale progress
 export function removeDriveFromWatcher(path: string) {
+	backupAbortControllers.get(path)?.abort();
+	backupAbortControllers.delete(path);
 	watchedDrives = watchedDrives.filter((d) => d.path !== path);
 	const idx = watchedPaths.indexOf(hostPath(path));
 	if (idx !== -1) watchedPaths.splice(idx, 1);
 	watcher?.unwatch(hostPath(path));
 	delete backupProgress[path]; // clear any leftover progress state
+}
+
+// Sync updated drive settings (exclude file, retention) into the in-memory watcher state.
+export function updateDriveInWatcher(drive: WatchedDrive) {
+	const idx = watchedDrives.findIndex((d) => d.path === drive.path);
+	if (idx !== -1) watchedDrives[idx] = drive;
 }
 
 // https://www.prisma.io/docs/orm/prisma-schema/overview/generators#importing-generated-model-types
@@ -85,12 +105,19 @@ export async function watchPathsInBg(
 	});
 
 	// When a watched path is deleted, chokidar removes it from the watchlist — polling stops.
-	// If the direct parent still exists, re-add the path directly (normal drive unplug case).
-	// If the parent is also gone, walk up to the deepest surviving ancestor and watch that
-	// instead — chokidar's recursive scanning will detect the re-creation of the original path.
+	// Cancel any running backup for this drive, then re-add the path (or an ancestor) so we
+	// can detect when the drive is plugged back in.
 	watcher.on('unlinkDir', async (deletedPath: string) => {
 		if (!watchedPaths.includes(deletedPath)) return;
 		console.log(`Directory removed that we're watching: ${deletedPath}`);
+
+		// Cancel any in-progress backup — drive is gone, continuing would only error.
+		const drive = watchedDrives.find((d) => hostPath(d.path) === deletedPath);
+		if (drive) {
+			backupAbortControllers.get(drive.path)?.abort();
+			backupAbortControllers.delete(drive.path);
+		}
+
 		const parent = dirname(deletedPath);
 		try {
 			await access(parent);
@@ -123,14 +150,34 @@ export async function watchPathsInBg(
 				return;
 			}
 
-			const resticInstance = new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path));
-			for await (const update of resticInstance.backup()) {
+			// Each backup gets its own AbortController stored in backupAbortControllers.
+			// If the drive is unplugged mid-backup, the unlinkDir handler calls controller.abort(),
+			// which signals execa to kill the restic process immediately (via SIGTERM).
+			// restic.backup() catches the cancellation and returns without yielding an error event.
+			const controller = new AbortController();
+			backupAbortControllers.set(drive.path, controller);
+
+			const restic = new Restic(
+				hostPath(drive.backupPath),
+				drive.resticKey,
+				hostPath(drive.path),
+				resticOptions(drive)
+			);
+
+			for await (const update of restic.backup(controller.signal)) {
 				// Restic output: {"message_type":"status","percent_done":1,"total_files":4,"files_done":4,"total_bytes":2147483693,"bytes_done":2147483693}
 				// Use the natural (un-prefixed) path as the progress key so the polling endpoint can find it
 				backupProgress[drive.path] = update;
 				if (update.message_type === 'status') {
 					console.log(`Backup progress for ${drive.path}: ${update.percent_done}%`);
 				}
+			}
+
+			backupAbortControllers.delete(drive.path);
+
+			// Prune old snapshots according to the drive's retention policy (no-op if unconfigured)
+			if (backupProgress[drive.path]?.message_type === 'summary') {
+				await restic.applyRetention();
 			}
 		}
 	});
@@ -141,10 +188,12 @@ if (import.meta.main) {
 	watchPathsInBg({
 		drives: [
 			{
-				path: 'test-data/to-backup',
-				backupPath: 'test-data/restic-backup-repo',
-				resticKey: 'testkey',
-				autoBackup: true
+				path:          'test-data/to-backup',
+				backupPath:    'test-data/restic-backup-repo',
+				resticKey:     'testkey',
+				autoBackup:    true,
+				excludeFile:   null,
+				keepSnapshots: null,
 			}
 		]
 	});

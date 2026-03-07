@@ -3,8 +3,8 @@ import { fail, redirect } from '@sveltejs/kit';
 import { promises as fs } from 'node:fs';
 import prisma from '$lib/prisma';
 import { Prisma } from '$lib/../generated/prisma/client';
-import Restic from '$lib/restic';
-import { addDriveToWatcher, removeDriveFromWatcher } from '$lib/watcher';
+import Restic, { type ResticOptions } from '$lib/restic';
+import { addDriveToWatcher, removeDriveFromWatcher, updateDriveInWatcher } from '$lib/watcher';
 import { backupProgress } from '$lib/server/backup-progress';
 import { hostPath, hostPrefix } from '$lib/server/host-path';
 
@@ -33,6 +33,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return { drives: drivesForClient, snapshots: snapshotMap, hostPrefix };
 };
 
+// Converts nullable Drive config fields to the ResticOptions interface.
+// Applies the host prefix to excludeFile since Restic receives the resolved path.
+function driveResticOptions(drive: { excludeFile: string | null; keepSnapshots: number | null }): ResticOptions {
+	return {
+		excludeFile:   drive.excludeFile   ? hostPath(drive.excludeFile) : undefined,
+		keepSnapshots: drive.keepSnapshots ?? undefined,
+	};
+}
+
 export const actions = {
 	// Create a new drive record and register it with the watcher immediately.
 	create: async ({ request, locals }) => {
@@ -40,9 +49,9 @@ export const actions = {
 
 		const data = await request.formData();
 		const payload: Prisma.DriveCreateInput = {
-			path: data.get('path') as string,
+			path:       data.get('path')       as string,
 			backupPath: data.get('backupPath') as string,
-			resticKey: data.get('resticKey') as string
+			resticKey:  data.get('resticKey')  as string,
 		};
 		const newDrive = await prisma.drive.create({ data: payload });
 		addDriveToWatcher(newDrive);
@@ -81,9 +90,17 @@ export const actions = {
 		if (!drive) return fail(404, { message: 'Drive not found' });
 
 		(async () => {
-			const restic = new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path));
+			const restic = new Restic(
+				hostPath(drive.backupPath),
+				drive.resticKey,
+				hostPath(drive.path),
+				driveResticOptions(drive)
+			);
 			for await (const update of restic.backup()) {
 				backupProgress[drive.path] = update;
+			}
+			if (backupProgress[drive.path]?.message_type === 'summary') {
+				await restic.applyRetention();
 			}
 		})();
 
@@ -99,6 +116,47 @@ export const actions = {
 		const id = data.get('id') as string;
 		await prisma.drive.update({ where: { id }, data: { autoBackup: data.get('autoBackup') === 'on' } });
 		throw redirect(303, '/drives');
+	},
+
+	// Save the optional per-drive configuration (exclude file path, snapshot retention).
+	updateSettings: async ({ request, locals }) => {
+		if (!locals.session) return fail(401, { message: 'Unauthorized' });
+
+		const data = await request.formData();
+		const id = data.get('id') as string;
+
+		const keepRaw = parseInt(data.get('keepSnapshots') as string, 10);
+		const updated = await prisma.drive.update({
+			where: { id },
+			data: {
+				excludeFile:   (data.get('excludeFile') as string) || null,
+				keepSnapshots: keepRaw > 0 ? keepRaw : null,
+			},
+		});
+
+		// Sync the watcher's in-memory drive cache so the next backup picks up new settings.
+		updateDriveInWatcher(updated);
+
+		throw redirect(303, '/drives');
+	},
+
+	// Run `restic check` to verify the repo's integrity.
+	// Returns the output so the client can display it inline (via use:enhance).
+	checkRepo: async ({ request, locals }) => {
+		if (!locals.session) return fail(401, { message: 'Unauthorized' });
+
+		const data = await request.formData();
+		const id = data.get('id') as string;
+
+		const drive = await prisma.drive.findUnique({ where: { id } });
+		if (!drive) return fail(404, { message: 'Drive not found' });
+
+		try {
+			const result = await new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path)).check();
+			return { driveId: id, checkResult: result };
+		} catch (err) {
+			return fail(500, { message: `Check failed: ${err}` });
+		}
 	},
 
 	// Delete a single snapshot and prune unreferenced data from the repo.

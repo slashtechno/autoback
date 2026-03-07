@@ -4,8 +4,11 @@
 	import type { PageProps } from './$types';
 
 	let { form, data }: PageProps = $props();
-	let progress: Record<string, { percent: number; status: string }> = $state({});
+
+	type ProgressEntry = { percent: number; status: string; error?: string };
+	let progress: Record<string, ProgressEntry> = $state({});
 	let deleteDialogs: Record<string, HTMLDialogElement> = $state({});
+	let checkResults: Record<string, string> = $state({});
 
 	// Poll backup progress once per second. We use polling rather than SSE/websockets because
 	// the endpoint just reads a server-side in-memory object that the watcher writes to.
@@ -21,6 +24,9 @@
 					};
 				} else if (update.message_type === 'summary') {
 					progress[drive.id] = { percent: 100, status: 'Complete' };
+					clearInterval(interval);
+				} else if (update.message_type === 'error') {
+					progress[drive.id] = { percent: 0, status: 'Error', error: update.error };
 					clearInterval(interval);
 				}
 			}, 1000);
@@ -88,14 +94,20 @@
 
 			<!-- Progress bar (only visible during an active backup) -->
 			{#if progress[drive.id]}
-				<div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-					{progress[drive.id].percent}% — {progress[drive.id].status}
-				</div>
-				<progress
-					value={progress[drive.id].percent}
-					max="100"
-					class="block w-full h-0.5 accent-gray-500 dark:accent-gray-400 my-1"
-				></progress>
+				{#if progress[drive.id].error}
+					<p class="text-xs text-red-500 dark:text-red-400 mt-1 mb-1.5">
+						Error: {progress[drive.id].error}
+					</p>
+				{:else}
+					<div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
+						{progress[drive.id].percent}% — {progress[drive.id].status}
+					</div>
+					<progress
+						value={progress[drive.id].percent}
+						max="100"
+						class="block w-full h-0.5 accent-gray-500 dark:accent-gray-400 my-1"
+					></progress>
+				{/if}
 			{/if}
 
 			<!-- Actions -->
@@ -127,6 +139,60 @@
 					onclick={() => deleteDialogs[drive.id]?.showModal()}
 				>Delete</button>
 			</div>
+
+			<!-- Per-drive configuration -->
+			<details class="mt-2">
+				<summary class="text-xs text-gray-400 dark:text-gray-500 cursor-pointer select-none">Configure</summary>
+				<div class="mt-2 pl-3 border-l-2 border-gray-200 dark:border-gray-700 space-y-3">
+					<form
+						method="POST"
+						use:enhance
+						action="?/updateSettings"
+						class="space-y-2"
+					>
+						<input type="hidden" name="id" value={drive.id} />
+						<label class="text-xs flex gap-2 items-center">
+							<span class="w-28 shrink-0 text-gray-500 dark:text-gray-400">Exclude file</span>
+							<input
+								type="text"
+								name="excludeFile"
+								value={drive.excludeFile ?? ''}
+								placeholder="/path/to/excludes.txt"
+								class="flex-1 text-xs py-px"
+							/>
+						</label>
+						<label class="text-xs flex gap-2 items-center">
+							<span class="w-28 shrink-0 text-gray-500 dark:text-gray-400">Keep snapshots</span>
+							<input
+								type="number"
+								name="keepSnapshots"
+								value={drive.keepSnapshots ?? ''}
+								min="1"
+								placeholder="unlimited"
+								class="w-24 text-xs py-px"
+							/>
+						</label>
+						<button type="submit" class="text-xs">Save</button>
+					</form>
+
+					<!-- Check repo integrity -->
+					<form
+						method="POST"
+						use:enhance={({ }) => async ({ result }) => {
+							if (result.type === 'success' && result.data?.driveId === drive.id) {
+								checkResults[drive.id] = result.data.checkResult as string;
+							}
+						}}
+						action="?/checkRepo"
+					>
+						<input type="hidden" name="id" value={drive.id} />
+						<button type="submit" class="text-xs">Check repo integrity</button>
+					</form>
+					{#if checkResults[drive.id]}
+						<pre class="text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap mt-1">{checkResults[drive.id]}</pre>
+					{/if}
+				</div>
+			</details>
 
 			<!-- Snapshot list -->
 			{#if data.snapshots?.[drive.id]?.length}
