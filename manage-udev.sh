@@ -132,6 +132,12 @@ EOF
     udevadm control --reload-rules
     echo ""
     echo "  Rule added: $uuid → $mount (udev reloaded)"
+
+    read -rp "  Drive already plugged in? Trigger the rule now? [Y/n]: " trigger
+    if [[ "${trigger,,}" != "n" ]]; then
+        udevadm trigger --action=add --property-match=ID_FS_UUID="$uuid"
+        echo "  Triggered. Check $mount to confirm the drive is mounted."
+    fi
 }
 
 # ── remove a rule ──────────────────────────────────────────────────────────────
