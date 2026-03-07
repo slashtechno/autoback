@@ -69,6 +69,11 @@ export async function watchPathsInBg(
 	watchedDrives = drives;
 	watchedPaths.push(...drives.map((d) => hostPath(d.path)));
 
+	// Drive detection works by watching for the mount-point directory to appear (addDir)
+	// and disappear (unlinkDir). This requires the directory to not exist when the drive is
+	// absent. Do NOT use fstab or x-systemd.automount — both keep a permanent stub directory
+	// at the mount point, so addDir never fires on plug-in and unlinkDir never fires on unplug.
+	// Use udev rules instead (see README / manage-udev.sh).
 	watcher = chokidar.watch(watchedPaths, {
 		persistent: false, // We want the process to exit if this is the only thing left running
 		// usePolling makes chokidar check paths via fs.stat() on an interval rather than
