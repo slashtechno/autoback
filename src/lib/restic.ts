@@ -96,7 +96,7 @@ export default class Restic {
 				'backup', this.sourcePath, ...this.repoFlags, '--json',
 				...(this.options.excludeFile ? ['--exclude-file', this.options.excludeFile] : []),
 			];
-			const proc = execa('restic', flags, { env: this.env, cancelSignal: signal });
+			const proc = execa('restic', flags, { env: this.env, cancelSignal: signal, buffer: false });
 
 			for await (const line of proc) {
 				yield JSON.parse(line) as ResticEvent;
