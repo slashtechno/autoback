@@ -48,14 +48,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Delete untagged images
-        run: |
-          gh api --paginate "/user/packages/container/autoback/versions" \
-            --jq '.[] | select(.metadata.container.tags | length == 0) | .id' \
-          | while read -r id; do
-              gh api --method DELETE "/user/packages/container/autoback/versions/$id"
-              echo "Deleted untagged version $id"
-            done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
