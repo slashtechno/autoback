@@ -16,7 +16,9 @@ export const auth = betterAuth({
 	plugins: [
 		apiKey({
 			// https://better-auth.com/docs/plugins/api-key/advanced#sessions-from-api-keys
-			enableSessionForAPIKeys: true
+			enableSessionForAPIKeys: true,
+			// https://better-auth.com/docs/plugins/api-key/advanced#rate-limiting
+			rateLimit: { enabled: false }
 		}),
 		sveltekitCookies(getRequestEvent)
 	] // make sure this is the last plugin in the array

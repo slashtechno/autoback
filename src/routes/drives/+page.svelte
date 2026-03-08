@@ -86,10 +86,11 @@
 	{#each data.drives as drive (drive.id)}
 		<div class="py-2.5 border-b border-gray-200 dark:border-gray-700">
 			<!-- source → backup path -->
-			<div class="mb-1">
+			<div class="mb-1">	
 				<code class="text-[13px]">{drive.path}</code>
 				<span class="text-gray-400 dark:text-gray-600 mx-1.5">→</span>
 				<code class="text-xs text-gray-400 dark:text-gray-500">{drive.backupPath}</code>
+				<p>ID: <code class="text-xs text-gray-400 dark:text-gray-500">{drive.id}</code></p>
 			</div>
 
 			<!-- Progress bar (only visible during an active backup) -->

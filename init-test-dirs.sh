@@ -19,4 +19,6 @@ echo "This is file1." > test-data/to-backup/file1.txt
 echo "This is file2." > test-data/to-backup/file2.txt
 echo "This is file3." > test-data/to-backup/subdir/file3.txt
 # Create a 10GB sparse file for testing large file backups
-truncate -s 10G test-data/to-backup/large-file.bin
+# truncate -s 10G test-data/to-backup/large-file.bin
+# Create a 10gb file with random data for testing large file backups (uncomment if you want to test with actual data instead of a sparse file)
+dd if=/dev/urandom of=test-data/to-backup/large-file.bin bs=1M count=2048
