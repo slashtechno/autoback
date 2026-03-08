@@ -7,6 +7,9 @@ RUN bunx svelte-kit sync
 RUN bun run build
 
 FROM oven/bun:1
+LABEL org.opencontainers.image.title="autoback" \
+      org.opencontainers.image.description="Automatically back up drives when plugged in using Restic snapshots" \
+      org.opencontainers.image.source="https://github.com/slashtechno/autoback"
 RUN apt-get update && apt-get install -y restic && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/build ./build
