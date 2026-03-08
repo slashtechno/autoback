@@ -17,7 +17,7 @@ The goal of this project is to be able to plug in the portable SSD that I work o
 ## Running in Production
 
 ```bash
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 The container includes Restic and runs migrations automatically on startup. The app runs on port 8433.
@@ -25,7 +25,7 @@ The container includes Restic and runs migrations automatically on startup. The 
 ### Updating
 
 ```bash
-git pull && docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 Migrations run automatically on startup, so no manual database steps are needed.
