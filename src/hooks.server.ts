@@ -5,11 +5,14 @@ import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { watchPathsInBg } from '$lib/watcher';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const session = await auth.api.getSession({ headers: event.request.headers });
-
-	if (session) {
-		event.locals.session = session.session;
-		event.locals.user = session.user;
+	try {
+		const session = await auth.api.getSession({ headers: event.request.headers });
+		if (session) {
+			event.locals.session = session.session;
+			event.locals.user = session.user;
+		}
+	} catch {
+		// Invalid/expired session or API key — locals remain unset, routes handle auth
 	}
 
 	return svelteKitHandler({ event, resolve, auth, building });

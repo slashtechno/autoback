@@ -230,7 +230,7 @@
 										name="targetPath"
 										placeholder="/ (in-place) or /tmp/restore"
 										title="Restic treats this as a filesystem root. Use / to restore files to their original paths."
-										class="w-[220px] text-xs py-px px-1.5"
+										class="w-55 text-xs py-px px-1.5"
 										required
 									/>
 									<button type="submit" class="text-xs py-px px-2">Restore</button>

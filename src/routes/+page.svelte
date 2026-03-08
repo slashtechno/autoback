@@ -7,6 +7,7 @@
 {#if $session.data}
     <ul>
         <li><a href="/drives">Drives</a></li>
+        <li><a href="/keys">API Keys</a></li>
     </ul>
 {/if}
 </div>

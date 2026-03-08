@@ -4,6 +4,7 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { env } from '$env/dynamic/private';
 import { getRequestEvent } from '$app/server';
 import prisma from '$lib/prisma';
+import { apiKey } from '@better-auth/api-key';
 
 export const auth = betterAuth({
 	baseURL: env.ORIGIN || undefined,
@@ -12,5 +13,11 @@ export const auth = betterAuth({
 		provider: 'sqlite'
 	}),
 	emailAndPassword: { enabled: true },
-	plugins: [sveltekitCookies(getRequestEvent)] // make sure this is the last plugin in the array
+	plugins: [
+		apiKey({
+			// https://better-auth.com/docs/plugins/api-key/advanced#sessions-from-api-keys
+			enableSessionForAPIKeys: true
+		}),
+		sveltekitCookies(getRequestEvent)
+	] // make sure this is the last plugin in the array
 });
