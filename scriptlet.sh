@@ -2,6 +2,16 @@
 # Name: Autoback Dashboard
 # Author: Angad Behl
 
+
+# ---------------------------- EDIT BELOW THIS LINE ----------------------------
+BASE_URL="http://localhost:5173" # Change if your server is running on a different URL or port
+DRIVE_ID="FIND THE DRIVE ID FROM THE WEB UI (/drives) AND REPLACE THIS STRING"
+API_KEY="CREATE AN API KEY AND REPLACE THIS STRING"
+# ---------------------------- EDIT ABOVE THIS LINE ----------------------------
+
+# Endpoint with JSON response
+url="$BASE_URL/drives/$DRIVE_ID/backup"
+
 fmt_secs() {
     secs=$1
     d=$((secs/86400))
@@ -10,13 +20,6 @@ fmt_secs() {
     s=$((secs%60))
     echo "${d}d ${h}h ${m}m ${s}s"
 }
-
-BASE_URL="http://localhost:5173"
-DRIVE_ID="cmmhcuhgs0000m4ijf93iky5l" # Replace with actual drive ID
-API_KEY="LjTXBbRgFTxKdutGPBaPZOPMjndzOrqNXFLamrHMycAEaizOGoaUwniadBFSgTTj"
-
-# Endpoint with JSON response
-url="$BASE_URL/drives/$DRIVE_ID/backup"
 
 printf '\033[?1049h'                        # enter alternate screen
 trap 'printf "\033[?1049l"' 0               # restore normal screen on exit

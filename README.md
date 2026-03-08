@@ -14,8 +14,7 @@ The goal of this project is to be able to plug in the portable SSD that I work o
 3. Copy `.env.example` to `.env` and fill in the required environment variables.
    a. `cp .env.example .env`
 
-## Running in Production
-
+## Running in Production  
 ```bash
 docker compose pull && docker compose up -d
 ```
@@ -74,3 +73,10 @@ The script provides a simple menu to add and remove rules. It will show you avai
    ```
 
 Plug in the drive — it will be mounted automatically. Configure the same path (`/mnt/backup` in the example) in the Autoback web UI.
+
+## CLI Dashboard
+To show an updating dashboard, generate an API key (it won't expire until you revoke it) in the web UI, edit the variables in `scriptlet.sh`, then run the script:
+```bash  
+bash scriptlet.sh
+```
+The idea is that you can run this as a [scriptlet](https://kindlemodding.org/kindle-dev/scriptlets.html) on a modded Kindle, and have it show backup status in real time on the e-ink screen. 
