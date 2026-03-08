@@ -153,6 +153,14 @@ export async function watchPathsInBg(
 				return;
 			}
 
+			// Only one backup per drive at a time — chokidar can re-fire addDir during polling
+			// or when a path is re-watched, and unlockRepo() would steal the lock from any
+			// already-running restic process, corrupting it.
+			if (backupAbortControllers.has(drive.path)) {
+				console.log(`Backup already in progress for ${drive.path}, skipping`);
+				return;
+			}
+
 			// Each backup gets its own AbortController stored in backupAbortControllers.
 			// If the drive is unplugged mid-backup, the unlinkDir handler calls controller.abort(),
 			// which signals execa to kill the restic process immediately (via SIGTERM).
