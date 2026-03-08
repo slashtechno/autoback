@@ -43,8 +43,8 @@ const watchedPaths: string[] = [];
 const anchorWatchers = new Map<string, string>();
 // drive path → AbortController for any currently running backup
 const backupAbortControllers = new Map<string, AbortController>();
-// drive path → timestamp (ms) of the last logged progress line (to avoid log spam)
-const lastLoggedProgress = new Map<string, number>();
+// drive path → { time: last log timestamp (ms), pct: last logged percentage string }
+const lastLoggedProgress = new Map<string, { time: number; pct: string }>();
 
 // Build ResticOptions from a WatchedDrive, applying the host prefix to any file paths.
 function resticOptions(drive: WatchedDrive) {
@@ -181,12 +181,12 @@ export async function watchPathsInBg(
 				backupProgress[drive.path] = update;
 				if (update.message_type === 'status') {
 					const now = Date.now();
-					const lastLogged = lastLoggedProgress.get(drive.path) ?? 0;
-					// Only log at most once every 10 seconds to avoid log spam
-					if (now - lastLogged >= 10_000) {
-						const pct = (update.percent_done * 100).toFixed(0);
+					const pct = (update.percent_done * 100).toFixed(0);
+					const last = lastLoggedProgress.get(drive.path);
+					// Log at most once per 10s and only when the displayed percentage changes
+					if (now - (last?.time ?? 0) >= 10_000 && pct !== last?.pct) {
 						console.log(`Backup progress for ${drive.path}: ${pct}%`);
-						lastLoggedProgress.set(drive.path, now);
+						lastLoggedProgress.set(drive.path, { time: now, pct });
 					}
 				}
 			}

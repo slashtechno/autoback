@@ -25,7 +25,7 @@ The container includes Restic and runs migrations automatically on startup. The 
 ### Updating
 
 ```bash
-docker compose pull && docker compose up -d
+git pull && docker compose pull && docker compose up -d
 ```
 
 Migrations run automatically on startup, so no manual database steps are needed.
