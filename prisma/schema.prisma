@@ -91,7 +91,7 @@ model Apikey {
   start               String?
   referenceId         String
   prefix              String?
-  key                 String
+  key                 String    @unique
   refillInterval      Int?
   refillAmount        Int?
   lastRefillAt        DateTime?
@@ -103,13 +103,12 @@ model Apikey {
   remaining           Int?
   lastRequest         DateTime?
   expiresAt           DateTime?
-  createdAt           DateTime
-  updatedAt           DateTime
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   permissions         String?
   metadata            String?
 
   @@index([configId])
   @@index([referenceId])
-  @@index([key])
   @@map("apikey")
 }

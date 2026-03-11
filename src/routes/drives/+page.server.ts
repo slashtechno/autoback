@@ -7,6 +7,7 @@ import Restic, { type ResticOptions } from '$lib/restic';
 import { addDriveToWatcher, removeDriveFromWatcher, updateDriveInWatcher } from '$lib/watcher';
 import { backupProgress } from '$lib/server/backup-progress';
 import { hostPath, hostPrefix } from '$lib/server/host-path';
+import { parseDiff } from '$lib/diff';
 
 // Fetch all drives (including resticKey, which lives server-side only) and their snapshots.
 // resticKey is stripped before the data is returned to the browser.
@@ -171,6 +172,25 @@ export const actions = {
 
 		await new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path)).forget(snapshotId);
 		throw redirect(303, '/drives');
+	},
+
+	// Diff a snapshot against its predecessor, returning grouped file changes.
+	diffSnapshot: async ({ request, locals }) => {
+		if (!locals.session) return fail(401, { message: 'Unauthorized' });
+
+		const data = await request.formData();
+		const snapshotId     = data.get('snapshotId')     as string;
+		const prevSnapshotId = data.get('prevSnapshotId') as string;
+
+		const drive = await prisma.drive.findUnique({ where: { id: data.get('driveId') as string } });
+		if (!drive) return fail(404, { message: 'Drive not found' });
+
+		try {
+			const raw = await new Restic(hostPath(drive.backupPath), drive.resticKey, hostPath(drive.path)).diff(prevSnapshotId, snapshotId);
+			return { snapshotId, groups: parseDiff(raw) };
+		} catch (err) {
+			return fail(500, { message: `Diff failed: ${err}` });
+		}
 	},
 
 	// Restore a snapshot to a target path. Blocks until complete (may take a while for large repos).

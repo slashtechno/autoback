@@ -36,7 +36,6 @@
 	},
 	"dependencies": {
 		"@better-auth/api-key": "^1.5.4",
-		"@better-auth/passkey": "^1.4.18",
 		"@libsql/client": "^0.17.0",
 		"@picocss/pico": "^2.1.1",
 		"@prisma/adapter-libsql": "^7.4.2",

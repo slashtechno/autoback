@@ -63,6 +63,12 @@ export default class Restic {
 		console.log(`Retention applied: kept last ${keepSnapshots} snapshots in ${this.repoPath}`);
 	}
 
+	// Show what changed between two snapshots. Returns the raw restic diff stdout.
+	async diff(idA: string, idB: string): Promise<string> {
+		const { stdout } = await execa('restic', ['diff', idA, idB, ...this.repoFlags], { env: this.env });
+		return stdout;
+	}
+
 	// Run `restic check` to verify repo integrity. Returns the stdout summary.
 	async check(): Promise<string> {
 		const { stdout } = await execa('restic', ['check', ...this.repoFlags], { env: this.env });

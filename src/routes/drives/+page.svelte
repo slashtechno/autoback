@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
+	import SnapshotDiff from '$lib/components/SnapshotDiff.svelte';
+	import type { DiffGroup } from '$lib/diff';
 
 	let { form, data }: PageProps = $props();
 
@@ -9,6 +11,8 @@
 	let progress: Record<string, ProgressEntry> = $state({});
 	let deleteDialogs: Record<string, HTMLDialogElement> = $state({});
 	let checkResults: Record<string, string> = $state({});
+	let diffResults: Record<string, DiffGroup[]> = $state({});
+	let diffErrors: Record<string, string> = $state({});
 
 	// Poll backup progress once per second. We use polling rather than SSE/websockets because
 	// the endpoint just reads a server-side in-memory object that the watcher writes to.
@@ -200,42 +204,75 @@
 				<details class="mt-2">
 					<summary class="text-sm text-gray-500 dark:text-gray-400">{data.snapshots[drive.id].length} snapshot{data.snapshots[drive.id].length !== 1 ? 's' : ''}</summary>
 					<div class="mt-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
-						{#each data.snapshots[drive.id] as snap (snap.id)}
-							<div class="flex gap-2 items-baseline py-1 border-b border-gray-100 dark:border-gray-800 flex-wrap">
-								<code class="text-xs">{snap.short_id}</code>
-								<span class="text-xs text-gray-400 dark:text-gray-500">{new Date(snap.time).toLocaleString()}</span>
+						{#each data.snapshots[drive.id] as snap, i (snap.id)}
+							{@const prev = i > 0 ? data.snapshots[drive.id][i - 1] : null}
+							<div class="py-1 border-b border-gray-100 dark:border-gray-800">
+								<div class="flex gap-2 items-baseline flex-wrap">
+									<code class="text-xs">{snap.short_id}</code>
+									<span class="text-xs text-gray-400 dark:text-gray-500">{new Date(snap.time).toLocaleString()}</span>
 
-								<form
-									method="POST"
-									use:enhance
-									action="?/deleteSnapshot"
-									class="inline"
-									onsubmit={(e) => { if (!confirm(`Delete snapshot ${snap.short_id}?`)) e.preventDefault(); }}
-								>
-									<input type="hidden" name="driveId" value={drive.id} />
-									<input type="hidden" name="snapshotId" value={snap.id} />
-									<button type="submit" class="text-xs py-px px-2">Delete</button>
-								</form>
+									<form
+										method="POST"
+										use:enhance
+										action="?/deleteSnapshot"
+										class="inline"
+										onsubmit={(e) => { if (!confirm(`Delete snapshot ${snap.short_id}?`)) e.preventDefault(); }}
+									>
+										<input type="hidden" name="driveId" value={drive.id} />
+										<input type="hidden" name="snapshotId" value={snap.id} />
+										<button type="submit" class="text-xs py-px px-2">Delete</button>
+									</form>
 
-								<form
-									method="POST"
-									use:enhance
-									action="?/restore"
-									class="contents"
-									onsubmit={(e) => confirmRestore(e, snap.short_id)}
-								>
-									<input type="hidden" name="driveId" value={drive.id} />
-									<input type="hidden" name="snapshotId" value={snap.id} />
-									<input
-										type="text"
-										name="targetPath"
-										placeholder="/ (in-place) or /tmp/restore"
-										title="Restic treats this as a filesystem root. Use / to restore files to their original paths."
-										class="w-55 text-xs py-px px-1.5"
-										required
-									/>
-									<button type="submit" class="text-xs py-px px-2">Restore</button>
-								</form>
+									<form
+										method="POST"
+										use:enhance
+										action="?/restore"
+										class="contents"
+										onsubmit={(e) => confirmRestore(e, snap.short_id)}
+									>
+										<input type="hidden" name="driveId" value={drive.id} />
+										<input type="hidden" name="snapshotId" value={snap.id} />
+										<input
+											type="text"
+											name="targetPath"
+											placeholder="/ (in-place) or /tmp/restore"
+											title="Restic treats this as a filesystem root. Use / to restore files to their original paths."
+											class="w-55 text-xs py-px px-1.5"
+											required
+										/>
+										<button type="submit" class="text-xs py-px px-2">Restore</button>
+									</form>
+
+									{#if prev}
+										<form
+											method="POST"
+											use:enhance={() => async ({ result }) => {
+												if (result.type === 'success' && result.data?.snapshotId === snap.id) {
+													diffResults[snap.id] = result.data.groups as DiffGroup[];
+													delete diffErrors[snap.id];
+												} else if (result.type === 'failure') {
+													diffErrors[snap.id] = (result.data as { message?: string })?.message ?? 'Diff failed';
+												}
+											}}
+											action="?/diffSnapshot"
+											class="inline"
+										>
+											<input type="hidden" name="driveId" value={drive.id} />
+											<input type="hidden" name="snapshotId" value={snap.id} />
+											<input type="hidden" name="prevSnapshotId" value={prev.id} />
+											<button type="submit" class="text-xs py-px px-2">Diff</button>
+										</form>
+									{/if}
+								</div>
+
+								{#if diffErrors[snap.id]}
+									<p class="text-xs text-red-500 dark:text-red-400 mt-1">{diffErrors[snap.id]}</p>
+								{/if}
+								{#if diffResults[snap.id]}
+									<div class="mt-1 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
+										<SnapshotDiff groups={diffResults[snap.id]} />
+									</div>
+								{/if}
 							</div>
 						{/each}
 					</div>

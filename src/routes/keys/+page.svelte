@@ -4,14 +4,14 @@
 	import type { ApikeyModel } from '$lib/../generated/prisma/models/Apikey';
 
 	let keys = $state<ApikeyModel[] | undefined>();
-	let error = $state<string | null>(null);
+	let fetchError = $state<string | null>(null);
 
 	onMount(async () => {
 		const { data, error: err } = await authClient.apiKey.list({ query: {} });
 		if (err) {
-			error = err.message ?? 'Unknown error';
+			fetchError = err.message ?? 'Unknown error';
 		} else {
-			keys = data?.apiKeys;
+			keys = data?.apiKeys ?? [];
 		}
 	});
 
@@ -29,9 +29,10 @@
 	}
 
 	async function createKey() {
+		if (!newKeyName.trim()) { alert('Please enter a name for the API key.'); return; }
 		const { data, error: err } = await authClient.apiKey.create({ name: newKeyName });
 		if (err) {
-			error = err.message ?? 'Unknown error';
+			alert(`Error creating API key: ${err.message ?? 'Unknown error'}`);
 		} else if (data) {
 			keys = [...(keys ?? []), data];
 			newKeyValue = data.key;
@@ -42,8 +43,8 @@
 
 <h1>API Keys</h1>
 <div>
-	{#if error}
-		<p class="text-red-500 dark:text-red-400">Error fetching API keys: {error}</p>
+	{#if fetchError}
+		<p class="text-red-500 dark:text-red-400">Error fetching API keys: {fetchError}</p>
 	{:else if keys === undefined}
 		<p>Loading...</p>
 	{:else if keys.length}

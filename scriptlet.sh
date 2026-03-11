@@ -31,7 +31,7 @@ printf '\033[H'
 # Fetch the data
 response=$(curl -s -X GET "$url" -H "x-api-key: $API_KEY")
 # export type ResticEvent =
-# 	| { message_type: 'status';  percent_done: number; total_files: number; files_done: number; to/tal_bytes: number; bytes_done: number }
+# 	| { message_type: 'status';  percent_done: number; total_files: number; files_done: number; total_bytes: number; bytes_done: number }
 # 	| { message_type: 'summary'; files_new: number; files_changed: number; data_added: number; [key: string]: unknown }
 # 	| { message_type: 'error';   error: string };
 
@@ -45,9 +45,9 @@ if [ "$message_type" = "status" ]; then
   percent_done=$(echo "$response" | jq -r '.percent_done')
   percent_formatted=$(echo "$percent_done" | awk '{printf "%.1f%%\n", $1 * 100}')
   echo "Backup Progress: ${percent_formatted}"
-  echo "Files Done: $(echo "$response" | jq -r '.files_done') / $(echo "$response" | jq -r '.total_files')"
-  echo "Data Done: $(echo "$response" | jq -r '.bytes_done' | numfmt --to=iec) / $(echo "$response" | jq -r '.total_bytes' | numfmt --to=iec)"
-  echo "Time Remaining: $(fmt_secs $(echo "$response" | jq -r '.seconds_remaining'))"
+  echo "Files Done: $(echo "$response" | jq -r '.files_done // 0') / $(echo "$response" | jq -r '.total_files // 0')"
+  echo "Data Done: $(echo "$response" | jq -r '.bytes_done // 0' | numfmt --to=iec) / $(echo "$response" | jq -r '.total_bytes // 0' | numfmt --to=iec)"
+  echo "Time Remaining: $(fmt_secs "$(echo "$response" | jq -r '.seconds_remaining // 0')")"
 elif [ "$message_type" = "error" ]; then
   error_message=$(echo "$response" | jq -r '.error')
   echo "Error: $error_message"
