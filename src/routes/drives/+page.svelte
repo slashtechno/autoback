@@ -10,6 +10,9 @@
 
 	type ProgressEntry = { percent: number; status: string; error?: string };
 	let progress: Record<string, ProgressEntry> = $state({});
+	let mounted: Record<string, boolean> = $state(data.mounted ?? {});
+	// Keep mounted in sync when data refreshes (e.g. after invalidateAll on backup complete)
+	$effect(() => { Object.assign(mounted, data.mounted ?? {}); });
 	let deleteDialogs: Record<string, HTMLDialogElement> = $state({});
 	let checkResults: Record<string, string> = $state({});
 	let diffResults: Record<string, DiffGroup[]> = $state({});
@@ -29,7 +32,7 @@
 				try {
 					const { mounted: isMounted, progress: update } = await fetch(`/drives/${drive.id}/backup`).then((r) => r.json());
 					// Reflect live mounted status without waiting for a full page reload
-					if (data.mounted) data.mounted[drive.id] = isMounted;
+					mounted[drive.id] = isMounted;
 					if (!update) return;
 					if (update.message_type === 'status') {
 						progress[drive.id] = {
@@ -114,7 +117,7 @@
 			<!-- source → backup path -->
 			<div class="mb-1">
 				<code class="text-[13px]">{drive.path}</code>
-				{#if !data.mounted?.[drive.id]}
+				{#if !mounted[drive.id]}
 					<span class="ml-1.5 text-xs text-amber-600 dark:text-amber-400 border border-amber-400 dark:border-amber-600 rounded px-1 py-px">unplugged</span>
 				{/if}
 				<span class="text-gray-400 dark:text-gray-600 mx-1.5">→</span>
@@ -156,7 +159,7 @@
 			<div class="flex gap-1.5 flex-wrap items-center mt-1.5">
 				<form method="POST" use:enhance action="?/backup">
 					<input type="hidden" name="id" value={drive.id} />
-					<button type="submit" disabled={!data.mounted?.[drive.id]}>Backup now</button>
+					<button type="submit" disabled={!mounted[drive.id]}>Backup now</button>
 				</form>
 
 				<form method="POST" use:enhance action="?/toggleAutoBackup">
