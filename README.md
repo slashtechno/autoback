@@ -80,6 +80,18 @@ The script provides a simple menu to add and remove rules. It will show you avai
 
 Plug in the drive — it will be mounted automatically. Configure the same path (`/mnt/backup` in the example) in the Autoback web UI.
 
+## Per-drive Options
+
+<details>
+<summary>Exclude file and snapshot retention</summary>
+
+**Exclude file** — path to a text file listing patterns for restic to skip during backup (one per line). Useful for cache dirs, large temp files, etc. See [restic's exclude patterns](https://restic.readthedocs.io/en/stable/040_backup.html#excluding-files) for syntax. Example entry: `/home/user/.cache`.
+
+**Keep snapshots** — maximum number of snapshots to retain per drive. After each successful backup, older snapshots beyond this count are pruned automatically (`restic forget --keep-last N --prune`). Leave blank to keep all snapshots indefinitely.
+
+Both settings are configured per-drive under the **Configure** toggle in the web UI.
+</details>
+
 ## CLI Dashboard
 
 To show an updating dashboard, generate an API key (it won't expire until you revoke it) in the web UI, edit the variables in `scriptlet.sh`, then run the script:

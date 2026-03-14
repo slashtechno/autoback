@@ -27,7 +27,9 @@
 				if (inflight) return; // skip tick if previous request hasn't resolved yet
 				inflight = true;
 				try {
-					const update = await fetch(`/drives/${drive.id}/backup`).then((r) => r.json());
+					const { mounted: isMounted, progress: update } = await fetch(`/drives/${drive.id}/backup`).then((r) => r.json());
+					// Reflect live mounted status without waiting for a full page reload
+					if (data.mounted) data.mounted[drive.id] = isMounted;
 					if (!update) return;
 					if (update.message_type === 'status') {
 						progress[drive.id] = {
