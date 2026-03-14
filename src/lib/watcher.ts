@@ -6,6 +6,7 @@ import { Prisma } from '$lib/../generated/prisma/client';
 import Restic from './restic';
 import { backupProgress } from './server/backup-progress';
 import { hostPath } from './server/host-path';
+import { isPathReachable } from './server/path-check';
 
 // Walk up targetPath until we find a directory that exists. Used when a watched path
 // and some of its ancestors are deleted — we watch the deepest surviving ancestor so
@@ -24,7 +25,7 @@ async function deepestExistingAncestor(targetPath: string): Promise<string> {
 	return root;
 }
 
-const driveSelect = {
+export const driveSelect = {
 	path:          true,
 	backupPath:    true,
 	resticKey:     true,
@@ -33,7 +34,7 @@ const driveSelect = {
 	keepSnapshots: true,
 } satisfies Prisma.DriveSelect;
 
-type WatchedDrive = Prisma.DriveGetPayload<{ select: typeof driveSelect }>;
+export type WatchedDrive = Prisma.DriveGetPayload<{ select: typeof driveSelect }>;
 
 // Module-level state so external callers can add/remove/update drives without restarting the watcher
 let watcher: FSWatcher | null = null;
@@ -77,6 +78,60 @@ export function removeDriveFromWatcher(path: string) {
 export function updateDriveInWatcher(drive: WatchedDrive) {
 	const idx = watchedDrives.findIndex((d) => d.path === drive.path);
 	if (idx !== -1) watchedDrives[idx] = drive;
+}
+
+// Abort any in-progress backup for the given drive path.
+export function cancelBackup(path: string) {
+	backupAbortControllers.get(path)?.abort();
+}
+
+// Run one full backup cycle for a drive: abort-controller setup → backup generator → progress →
+// retention. Both the auto-backup path (addDir event) and the manual-backup action call this,
+// so cancellation via cancelBackup() works in both cases.
+export async function startManualBackup(drive: WatchedDrive) {
+	if (backupAbortControllers.has(drive.path)) {
+		console.log(`Backup already in progress for ${drive.path}, skipping`);
+		return;
+	}
+
+	if (!await isPathReachable(hostPath(drive.backupPath))) {
+		console.warn(`Backup repo unreachable for ${drive.path}: ${drive.backupPath}`);
+		backupProgress[drive.path] = { message_type: 'error', error: `Backup repo unreachable: ${drive.backupPath}` };
+		return;
+	}
+
+	const controller = new AbortController();
+	backupAbortControllers.set(drive.path, controller);
+
+	try {
+		const restic = new Restic(
+			hostPath(drive.backupPath),
+			drive.resticKey,
+			hostPath(drive.path),
+			resticOptions(drive)
+		);
+
+		for await (const update of restic.backup(controller.signal)) {
+			backupProgress[drive.path] = update;
+			if (update.message_type === 'status') {
+				const now = Date.now();
+				const pct = (update.percent_done * 100).toFixed(0);
+				const last = lastLoggedProgress.get(drive.path);
+				if (now - (last?.time ?? 0) >= 10_000 && pct !== last?.pct) {
+					console.log(`Backup progress for ${drive.path}: ${pct}%`);
+					lastLoggedProgress.set(drive.path, { time: now, pct });
+				}
+			}
+		}
+
+		if (backupProgress[drive.path]?.message_type === 'summary') {
+			await restic.applyRetention();
+		}
+	} finally {
+		// Always clean up so future backups aren't blocked, even if an unexpected error occurs
+		backupAbortControllers.delete(drive.path);
+		lastLoggedProgress.delete(drive.path);
+	}
 }
 
 // https://www.prisma.io/docs/orm/prisma-schema/overview/generators#importing-generated-model-types
@@ -153,51 +208,8 @@ export async function watchPathsInBg(
 				return;
 			}
 
-			// Only one backup per drive at a time — chokidar can re-fire addDir during polling
-			// or when a path is re-watched, and unlockRepo() would steal the lock from any
-			// already-running restic process, corrupting it.
-			if (backupAbortControllers.has(drive.path)) {
-				console.log(`Backup already in progress for ${drive.path}, skipping`);
-				return;
-			}
-
-			// Each backup gets its own AbortController stored in backupAbortControllers.
-			// If the drive is unplugged mid-backup, the unlinkDir handler calls controller.abort(),
-			// which signals execa to kill the restic process immediately (via SIGTERM).
-			// restic.backup() catches the cancellation and returns without yielding an error event.
-			const controller = new AbortController();
-			backupAbortControllers.set(drive.path, controller);
-
-			const restic = new Restic(
-				hostPath(drive.backupPath),
-				drive.resticKey,
-				hostPath(drive.path),
-				resticOptions(drive)
-			);
-
-			for await (const update of restic.backup(controller.signal)) {
-				// Restic output: {"message_type":"status","percent_done":1,"total_files":4,"files_done":4,"total_bytes":2147483693,"bytes_done":2147483693}
-				// Use the natural (un-prefixed) path as the progress key so the polling endpoint can find it
-				backupProgress[drive.path] = update;
-				if (update.message_type === 'status') {
-					const now = Date.now();
-					const pct = (update.percent_done * 100).toFixed(0);
-					const last = lastLoggedProgress.get(drive.path);
-					// Log at most once per 10s and only when the displayed percentage changes
-					if (now - (last?.time ?? 0) >= 10_000 && pct !== last?.pct) {
-						console.log(`Backup progress for ${drive.path}: ${pct}%`);
-						lastLoggedProgress.set(drive.path, { time: now, pct });
-					}
-				}
-			}
-
-			backupAbortControllers.delete(drive.path);
-			lastLoggedProgress.delete(drive.path);
-
-			// Prune old snapshots according to the drive's retention policy (no-op if unconfigured)
-			if (backupProgress[drive.path]?.message_type === 'summary') {
-				await restic.applyRetention();
-			}
+			// startManualBackup handles the already-in-progress guard and repo-path check
+			await startManualBackup(drive);
 		}
 	});
 }

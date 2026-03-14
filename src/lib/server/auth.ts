@@ -19,7 +19,7 @@ export const auth = betterAuth({
 			enableSessionForAPIKeys: true,
 			// https://better-auth.com/docs/plugins/api-key/advanced#rate-limiting
 			// 1000 req/min — generous enough for continuous polling (scriptlet polls every 3s)
-			rateLimit: { enabled: true, window: 60000, max: 1000 }
+			rateLimit: { enabled: true, timeWindow: 60000, maxRequests: 1000 }
 		}),
 		sveltekitCookies(getRequestEvent)
 	] // make sure this is the last plugin in the array

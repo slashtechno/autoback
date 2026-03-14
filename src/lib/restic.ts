@@ -83,10 +83,11 @@ export default class Restic {
 
 	// Spawn `restic dump` with stdout piped, for streaming a TAR archive to the browser.
 	// Caller is responsible for reading/piping proc.stdout.
-	dump() {
+	// 'latest' is a valid restic snapshot ID alias — pass a short_id to download a specific snapshot.
+	dump(snapshotId = 'latest') {
 		return execa(
 			'restic',
-			['dump', 'latest', this.sourcePath, '--archive', 'tar', ...this.repoFlags],
+			['dump', snapshotId, this.sourcePath, '--archive', 'tar', ...this.repoFlags],
 			{ env: this.env, stdout: 'pipe' }
 		);
 	}

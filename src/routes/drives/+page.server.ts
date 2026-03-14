@@ -1,12 +1,13 @@
 import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { promises as fs } from 'node:fs';
+import { access } from 'node:fs/promises';
 import prisma from '$lib/prisma';
 import { Prisma } from '$lib/../generated/prisma/client';
-import Restic, { type ResticOptions } from '$lib/restic';
-import { addDriveToWatcher, removeDriveFromWatcher, updateDriveInWatcher } from '$lib/watcher';
-import { backupProgress } from '$lib/server/backup-progress';
+import Restic from '$lib/restic';
+import { addDriveToWatcher, removeDriveFromWatcher, startManualBackup, updateDriveInWatcher } from '$lib/watcher';
 import { hostPath, hostPrefix } from '$lib/server/host-path';
+import { isPathReachable } from '$lib/server/path-check';
 import { parseDiff } from '$lib/diff';
 
 // Fetch all drives (including resticKey, which lives server-side only) and their snapshots.
@@ -17,31 +18,35 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const drives = await prisma.drive.findMany();
 	const drivesForClient = drives.map(({ resticKey, ...d }) => d);
 
-	// Run `restic snapshots` for each drive in parallel.
-	// On error (e.g. repo not yet initialized), return an empty array rather than failing the page.
-	const snapshotMap = Object.fromEntries(
-		await Promise.all(
-			drives.map(async (d) => {
-				try {
-					return [d.id, await new Restic(hostPath(d.backupPath), d.resticKey, hostPath(d.path)).snapshots()];
-				} catch {
-					return [d.id, []];
-				}
-			})
-		)
-	);
+	// Run per-drive checks and snapshot fetches in parallel.
+	const [snapshotMap, mountedMap, repoReachableMap] = await Promise.all([
+		// On error (e.g. repo not yet initialized), return an empty array rather than failing the page.
+		Promise.all(drives.map(async (d) => {
+			try {
+				return [d.id, await new Restic(hostPath(d.backupPath), d.resticKey, hostPath(d.path)).snapshots()];
+			} catch {
+				return [d.id, []];
+			}
+		})).then(Object.fromEntries),
 
-	return { drives: drivesForClient, snapshots: snapshotMap, hostPrefix };
+		// Source-path check: exact access only — a source dir that doesn't exist means drive unplugged.
+		Promise.all(drives.map(async (d) => {
+			try {
+				await access(hostPath(d.path));
+				return [d.id, true];
+			} catch {
+				return [d.id, false];
+			}
+		})).then(Object.fromEntries),
+
+		// Repo-path check: parent-fallback allowed — restic creates the leaf dir on first backup.
+		Promise.all(drives.map(async (d) => {
+			return [d.id, await isPathReachable(hostPath(d.backupPath))];
+		})).then(Object.fromEntries),
+	]);
+
+	return { drives: drivesForClient, snapshots: snapshotMap, mounted: mountedMap, repoReachable: repoReachableMap, hostPrefix };
 };
-
-// Converts nullable Drive config fields to the ResticOptions interface.
-// Applies the host prefix to excludeFile since Restic receives the resolved path.
-function driveResticOptions(drive: { excludeFile: string | null; keepSnapshots: number | null }): ResticOptions {
-	return {
-		excludeFile:   drive.excludeFile   ? hostPath(drive.excludeFile) : undefined,
-		keepSnapshots: drive.keepSnapshots ?? undefined,
-	};
-}
 
 export const actions = {
 	// Create a new drive record and register it with the watcher immediately.
@@ -90,20 +95,17 @@ export const actions = {
 		const drive = await prisma.drive.findUnique({ where: { id } });
 		if (!drive) return fail(404, { message: 'Drive not found' });
 
-		(async () => {
-			const restic = new Restic(
-				hostPath(drive.backupPath),
-				drive.resticKey,
-				hostPath(drive.path),
-				driveResticOptions(drive)
-			);
-			for await (const update of restic.backup()) {
-				backupProgress[drive.path] = update;
-			}
-			if (backupProgress[drive.path]?.message_type === 'summary') {
-				await restic.applyRetention();
-			}
-		})();
+		try {
+			await access(hostPath(drive.path));
+		} catch {
+			return fail(400, { message: 'Source directory is not accessible. Is the drive mounted?' });
+		}
+
+		if (!await isPathReachable(hostPath(drive.backupPath))) {
+			return fail(400, { message: 'Backup repository path is unreachable. Is the backup drive mounted?' });
+		}
+
+		startManualBackup(drive); // fire-and-forget — client polls /drives/[id]/backup for progress
 
 		throw redirect(303, '/drives');
 	},

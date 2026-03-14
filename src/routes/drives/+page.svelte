@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 	import SnapshotDiff from '$lib/components/SnapshotDiff.svelte';
@@ -16,26 +17,45 @@
 
 	// Poll backup progress once per second. We use polling rather than SSE/websockets because
 	// the endpoint just reads a server-side in-memory object that the watcher writes to.
+	// onMount returns a cleanup function that clears all intervals when the component unmounts.
 	onMount(() => {
+		const intervals: ReturnType<typeof setInterval>[] = [];
+
 		for (const drive of data.drives ?? []) {
+			let inflight = false;
 			const interval = setInterval(async () => {
-				const update = await fetch(`/drives/${drive.id}/backup`).then((r) => r.json());
-				if (!update) return;
-				if (update.message_type === 'status') {
-					progress[drive.id] = {
-						percent: Math.round(update.percent_done * 100),
-						status: `${update.files_done}/${update.total_files} files`
-					};
-				} else if (update.message_type === 'summary') {
-					progress[drive.id] = { percent: 100, status: 'Complete' };
-					clearInterval(interval);
-				} else if (update.message_type === 'error') {
-					progress[drive.id] = { percent: 0, status: 'Error', error: update.error };
-					clearInterval(interval);
+				if (inflight) return; // skip tick if previous request hasn't resolved yet
+				inflight = true;
+				try {
+					const update = await fetch(`/drives/${drive.id}/backup`).then((r) => r.json());
+					if (!update) return;
+					if (update.message_type === 'status') {
+						progress[drive.id] = {
+							percent: Math.round(update.percent_done * 100),
+							status: `${update.files_done}/${update.total_files} files`
+						};
+					} else if (update.message_type === 'summary') {
+						progress[drive.id] = { percent: 100, status: 'Complete' };
+						clearInterval(interval);
+						await invalidateAll(); // re-run load() to fetch fresh snapshots
+					} else if (update.message_type === 'error') {
+						progress[drive.id] = { percent: 0, status: 'Error', error: update.error };
+						clearInterval(interval);
+					}
+				} finally {
+					inflight = false;
 				}
 			}, 1000);
+			intervals.push(interval);
 		}
+
+		return () => intervals.forEach(clearInterval);
 	});
+
+	async function cancelBackup(driveId: string) {
+		await fetch(`/drives/${driveId}/backup`, { method: 'DELETE' });
+		delete progress[driveId];
+	}
 
 	// Warn the user about restic's target-as-filesystem-root behavior before restoring.
 	function confirmRestore(e: SubmitEvent, shortId: string) {
@@ -90,10 +110,16 @@
 	{#each data.drives as drive (drive.id)}
 		<div class="py-2.5 border-b border-gray-200 dark:border-gray-700">
 			<!-- source → backup path -->
-			<div class="mb-1">	
+			<div class="mb-1">
 				<code class="text-[13px]">{drive.path}</code>
+				{#if !data.mounted?.[drive.id]}
+					<span class="ml-1.5 text-xs text-amber-600 dark:text-amber-400 border border-amber-400 dark:border-amber-600 rounded px-1 py-px">unplugged</span>
+				{/if}
 				<span class="text-gray-400 dark:text-gray-600 mx-1.5">→</span>
 				<code class="text-xs text-gray-400 dark:text-gray-500">{drive.backupPath}</code>
+				{#if !data.repoReachable?.[drive.id]}
+					<span class="ml-1.5 text-xs text-amber-600 dark:text-amber-400 border border-amber-400 dark:border-amber-600 rounded px-1 py-px">repo unreachable</span>
+				{/if}
 				<p>ID: <code class="text-xs text-gray-400 dark:text-gray-500">{drive.id}</code></p>
 			</div>
 
@@ -104,8 +130,17 @@
 						Error: {progress[drive.id].error}
 					</p>
 				{:else}
-					<div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-						{progress[drive.id].percent}% — {progress[drive.id].status}
+					<div class="flex items-center gap-2 mb-0.5">
+						<span class="text-xs text-gray-500 dark:text-gray-400">
+							{progress[drive.id].percent}% — {progress[drive.id].status}
+						</span>
+						{#if progress[drive.id].percent < 100}
+							<button
+								type="button"
+								class="text-xs py-px px-2 text-red-600 dark:text-red-400 border-red-400 dark:border-red-600"
+								onclick={() => cancelBackup(drive.id)}
+							>Cancel</button>
+						{/if}
 					</div>
 					<progress
 						value={progress[drive.id].percent}
@@ -119,10 +154,8 @@
 			<div class="flex gap-1.5 flex-wrap items-center mt-1.5">
 				<form method="POST" use:enhance action="?/backup">
 					<input type="hidden" name="id" value={drive.id} />
-					<button type="submit">Backup now</button>
+					<button type="submit" disabled={!data.mounted?.[drive.id]}>Backup now</button>
 				</form>
-
-				<a href="/drives/{drive.id}/snapshot">↓ Download</a>
 
 				<form method="POST" use:enhance action="?/toggleAutoBackup">
 					<input type="hidden" name="id" value={drive.id} />
@@ -211,6 +244,12 @@
 									<code class="text-xs">{snap.short_id}</code>
 									<span class="text-xs text-gray-400 dark:text-gray-500">{new Date(snap.time).toLocaleString()}</span>
 
+									<a
+										href="/drives/{drive.id}/snapshot/{snap.short_id}"
+										class="text-xs py-px px-2"
+										title="Download this snapshot as .tar.gz"
+									>↓</a>
+
 									<form
 										method="POST"
 										use:enhance
@@ -248,7 +287,7 @@
 											method="POST"
 											use:enhance={() => async ({ result }) => {
 												if (result.type === 'success' && result.data?.snapshotId === snap.id) {
-													diffResults[snap.id] = result.data.groups as DiffGroup[];
+													diffResults[snap.id] = result.data?.groups as DiffGroup[];
 													delete diffErrors[snap.id];
 												} else if (result.type === 'failure') {
 													diffErrors[snap.id] = (result.data as { message?: string })?.message ?? 'Diff failed';

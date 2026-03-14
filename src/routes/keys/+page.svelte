@@ -3,7 +3,15 @@
 	import { authClient } from '$lib/auth-client';
 	import type { ApikeyModel } from '$lib/../generated/prisma/models/Apikey';
 
-	let keys = $state<ApikeyModel[] | undefined>();
+	// The list endpoint omits `key` (for security) and parses metadata/permissions from JSON strings
+	// into objects. All other fields come directly from the ApikeyModel schema.
+	type KeyListItem = Omit<ApikeyModel, 'key' | 'metadata' | 'permissions'> & {
+		key?: string;
+		metadata?: Record<string, unknown> | null;
+		permissions?: Record<string, string[]> | null;
+	};
+
+	let keys = $state<KeyListItem[] | undefined>();
 	let fetchError = $state<string | null>(null);
 
 	onMount(async () => {
@@ -18,7 +26,7 @@
 	let newKeyName = $state('');
 	let newKeyValue = $state<string | null>(null);
 
-	async function deleteKey(key: ApikeyModel) {
+	async function deleteKey(key: KeyListItem) {
 		if (!confirm(`Are you sure you want to delete the API key "${key.name}"? This action cannot be undone.`)) return;
 		const { error: err } = await authClient.apiKey.delete({ keyId: key.id });
 		if (err) {
